@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Watch Party</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 20px 0;
+            margin-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #ff6b6b, #feca57, #48dbfb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .connection-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .connection-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .status-badge.connecting {
+            background: rgba(255, 193, 7, 0.2);
+            color: #ffc107;
+        }
+
+        .status-badge.connected {
+            background: rgba(40, 167, 69, 0.2);
+            color: #28a745;
+        }
+
+        .status-badge.hosting {
+            background: rgba(0, 123, 255, 0.2);
+            color: #007bff;
+        }
+
+        .status-badge.error {
+            background: rgba(220, 53, 69, 0.2);
+            color: #dc3545;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .connecting .status-dot { background: #ffc107; }
+        .connected .status-dot { background: #28a745; }
+        .hosting .status-dot { background: #007bff; }
+        .error .status-dot { background: #dc3545; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .room-id-display {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 1.1rem;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .room-id-display:hover {
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        .join-section {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            min-width: 200px;
+            padding: 12px 20px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            color: #fff;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #48dbfb;
+        }
+
+        input[type="text"]::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .video-section {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+        }
+
+        @media (max-width: 900px) {
+            .video-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .video-container {
+            background: #000;
+            border-radius: 16px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            position: relative;
+        }
+
+        #player {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .video-loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+        }
+
+        .video-loading.hidden {
+            display: none;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .video-input-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .video-input-panel h3 {
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+
+        .video-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .control-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .control-buttons button {
+            flex: 1;
+            padding: 10px;
+        }
+
+        .participants-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            flex: 1;
+        }
+
+        .participants-panel h3 {
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .participant-count {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 2px 10px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+        }
+
+        .participants-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .participant {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .participant-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        .participant-name {
+            flex: 1;
+        }
+
+        .participant-host {
+            font-size: 0.75rem;
+            background: rgba(255, 193, 7, 0.2);
+            color: #ffc107;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .chat-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            margin-top: 20px;
+        }
+
+        .chat-messages {
+            height: 200px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+        }
+
+        .chat-message {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+
+        .chat-message .sender {
+            font-weight: 600;
+            color: #48dbfb;
+            margin-right: 8px;
+        }
+
+        .chat-message .time {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.5);
+            float: right;
+        }
+
+        .chat-message.system {
+            background: rgba(255, 193, 7, 0.1);
+            color: #ffc107;
+            font-style: italic;
+        }
+
+        .chat-input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input-group input {
+            flex: 1;
+        }
+
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: rgba(40, 167, 69, 0.9);
+            color: #fff;
+            border-radius: 10px;
+            animation: slideIn 0.3s ease;
+            z-index: 1000;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .sync-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: rgba(0, 123, 255, 0.9);
+            color: #fff;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .sync-indicator.active {
+            display: block;
+            animation: fadeInOut 2s forwards;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; }
+            20% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        .time-display {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            font-family: monospace;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎬 YouTube Watch Party</h1>
+            <p>友達と一緒に動画を楽しもう</p>
+        </header>
+
+        <div class="connection-panel">
+            <div class="connection-info">
+                <div id="statusBadge" class="status-badge connecting">
+                    <span class="status-dot"></span>
+                    <span id="statusText">接続中...</span>
+                </div>
+                <div id="roomIdDisplay" class="room-id-display" onclick="copyRoomId()" style="display: none;">
+                    ルームID: <span id="roomId"></span> 📋
+                </div>
+            </div>
+            <div class="join-section">
+                <input type="text" id="joinRoomId" placeholder="ルームIDを入力して参加...">
+                <button class="btn-primary" onclick="joinRoom()">参加する</button>
+                <button class="btn-secondary" onclick="createRoom()">新しいルームを作成</button>
+            </div>
+        </div>
+
+        <div class="video-section">
+            <div class="video-container">
+                <div id="loadingOverlay" class="video-loading">
+                    <div class="spinner"></div>
+                    <div>プレイヤーを読み込み中...</div>
+                </div>
+                <iframe id="player" 
+                    src="https://www.youtube.com/embed/dQw4w9WgXcQ?enablejsapi=1&rel=0&modestbranding=1"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen>
+                </iframe>
+            </div>
+
+            <div class="sidebar">
+                <div class="video-input-panel">
+                    <h3>🎥 動画を変更</h3>
+                    <div class="video-input-group">
+                        <input type="text" id="videoUrl" placeholder="YouTube URLを貼り付け...">
+                        <button class="btn-primary" onclick="changeVideo()">動画を変更</button>
+                    </div>
+                    <div class="control-buttons">
+                        <button class="btn-secondary" onclick="syncPlay()">▶ 再生</button>
+                        <button class="btn-secondary" onclick="syncPause()">⏸ 一時停止</button>
+                        <button class="btn-secondary" onclick="requestSync()">🔄 同期</button>
+                    </div>
+                    <div class="time-display">
+                        現在時間: <span id="currentTimeDisplay">0:00</span>
+                    </div>
+                </div>
+
+                <div class="participants-panel">
+                    <h3>👥 参加者 <span id="participantCount" class="participant-count">1</span></h3>
+                    <div id="participantsList" class="participants-list">
+                        <div class="participant">
+                            <div class="participant-avatar">あ</div>
+                            <div class="participant-name">あなた</div>
+                            <span class="participant-host">ホスト</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-panel">
+            <h3>💬 チャット</h3>
+            <div id="chatMessages" class="chat-messages"></div>
+            <div class="chat-input-group">
+                <input type="text" id="chatInput" placeholder="メッセージを入力..." onkeypress="handleChatKeypress(event)">
+                <button class="btn-primary" onclick="sendChat()">送信</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="syncIndicator" class="sync-indicator">🔄 同期中...</div>
+
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script>
+        // グローバル変数
+        let peer = null;
+        let connections = [];
+        let isHost = false;
+        let myRoomId = '';
+        let playerReady = false;
+        let isSyncing = false;
+        let participants = new Map();
+        let myName = 'ゲスト' + Math.floor(Math.random() * 1000);
+        let currentVideoId = 'dQw4w9WgXcQ';
+        let syncedTime = 0;
+        let isPlaying = false;
+        let playStartedAt = null;
+
+        const playerIframe = document.getElementById('player');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+
+        // プレイヤー初期化
+        function initPlayer() {
+            playerIframe.onload = function() {
+                loadingOverlay.classList.add('hidden');
+                playerReady = true;
+                console.log('Player iframe loaded');
+            };
+        }
+
+        // 現在の再生時間を計算
+        function getCurrentTime() {
+            if (isPlaying && playStartedAt) {
+                return syncedTime + (Date.now() - playStartedAt) / 1000;
+            }
+            return syncedTime;
+        }
+
+        // 時間表示を更新
+        function updateTimeDisplay() {
+            const time = getCurrentTime();
+            const minutes = Math.floor(time / 60);
+            const seconds = Math.floor(time % 60);
+            document.getElementById('currentTimeDisplay').textContent = 
+                `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        setInterval(updateTimeDisplay, 500);
+
+        // 動画を変更
+        function loadVideo(videoId, startTime = 0) {
+            currentVideoId = videoId;
+            syncedTime = startTime;
+            const src = `https://www.youtube.com/embed/${videoId}?enablejsapi=1&autoplay=1&start=${Math.floor(startTime)}&rel=0&modestbranding=1`;
+            playerIframe.src = src;
+            loadingOverlay.classList.remove('hidden');
+            isPlaying = true;
+            playStartedAt = Date.now();
+        }
+
+        // 再生同期
+        function syncPlay() {
+            const time = getCurrentTime();
+            loadVideo(currentVideoId, time);
+            isPlaying = true;
+            playStartedAt = Date.now();
+            syncedTime = time;
+            
+            broadcast({
+                type: 'play',
+                videoId: currentVideoId,
+                time: time,
+                timestamp: Date.now()
+            });
+            addSystemMessage('再生を開始しました');
+        }
+
+        // 一時停止同期
+        function syncPause() {
+            syncedTime = getCurrentTime();
+            isPlaying = false;
+            playStartedAt = null;
+            
+            // 一時停止状態で動画を再読み込み（一時停止を模擬）
+            const src = `https://www.youtube.com/embed/${currentVideoId}?enablejsapi=1&start=${Math.floor(syncedTime)}&rel=0&modestbranding=1`;
+            playerIframe.src = src;
+            
+            broadcast({
+                type: 'pause',
+                videoId: currentVideoId,
+                time: syncedTime,
+                timestamp: Date.now()
+            });
+            addSystemMessage('一時停止しました');
+        }
+
+        // 同期リクエスト
+        function requestSync() {
+            if (isHost) {
+                // ホストは自分の状態をブロードキャスト
+                broadcast({
+                    type: 'sync',
+                    videoId: currentVideoId,
+                    time: getCurrentTime(),
+                    isPlaying: isPlaying,
+                    timestamp: Date.now(),
+                    participants: Array.from(participants.entries())
+                });
+                addSystemMessage('同期情報を送信しました');
+            } else {
+                // ゲストはホストに同期をリクエスト
+                connections.forEach(conn => {
+                    if (conn.open) {
+                        conn.send({ type: 'requestSync' });
+                    }
+                });
+                addSystemMessage('同期をリクエストしました');
+            }
+        }
+
+        // PeerJS初期化
+        function initPeer(customId = null) {
+            const peerId = customId || 'ywp-' + Math.random().toString(36).substr(2, 9);
+            
+            peer = new Peer(peerId, {
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' }
+                    ]
+                }
+            });
+
+            peer.on('open', (id) => {
+                console.log('Peer connected with ID:', id);
+                myRoomId = id;
+                updateStatus('hosting', 'ルーム作成完了');
+                document.getElementById('roomId').textContent = id;
+                document.getElementById('roomIdDisplay').style.display = 'block';
+                isHost = true;
+                participants.set(id, { name: myName, isHost: true });
+                updateParticipantsList();
+                addSystemMessage('ルームを作成しました。ルームIDを共有して友達を招待しましょう！');
+            });
+
+            peer.on('connection', (conn) => {
+                handleConnection(conn);
+            });
+
+            peer.on('error', (err) => {
+                console.error('Peer error:', err);
+                if (err.type === 'unavailable-id') {
+                    showNotification('このルームIDは既に使用されています');
+                    updateStatus('error', 'エラー');
+                } else if (err.type === 'peer-unavailable') {
+                    showNotification('ルームが見つかりません');
+                    updateStatus('error', 'ルームが見つかりません');
+                } else {
+                    updateStatus('error', '接続エラー');
+                }
+            });
+        }
+
+        function handleConnection(conn) {
+            conn.on('open', () => {
+                console.log('Connection opened with:', conn.peer);
+                connections.push(conn);
+                
+                // ホストの場合、現在の状態を送信
+                if (isHost) {
+                    setTimeout(() => {
+                        conn.send({
+                            type: 'sync',
+                            videoId: currentVideoId,
+                            time: getCurrentTime(),
+                            isPlaying: isPlaying,
+                            timestamp: Date.now(),
+                            participants: Array.from(participants.entries())
+                        });
+                    }, 500);
+                }
+
+                // 自分の情報を送信
+                conn.send({
+                    type: 'introduce',
+                    name: myName,
+                    isHost: isHost
+                });
+
+                updateParticipantCount();
+            });
+
+            conn.on('data', (data) => {
+                handleData(data, conn);
+            });
+
+            conn.on('close', () => {
+                console.log('Connection closed:', conn.peer);
+                connections = connections.filter(c => c !== conn);
+                participants.delete(conn.peer);
+                updateParticipantsList();
+                updateParticipantCount();
+                addSystemMessage('参加者が退出しました');
+            });
+        }
+
+        function handleData(data, conn) {
+            console.log('Received data:', data);
+
+            switch (data.type) {
+                case 'sync':
+                    isSyncing = true;
+                    currentVideoId = data.videoId;
+                    isPlaying = data.isPlaying;
+                    
+                    // ネットワーク遅延を考慮して時間を調整
+                    const latency = (Date.now() - data.timestamp) / 1000;
+                    syncedTime = data.time + (isPlaying ? latency : 0);
+                    
+                    if (isPlaying) {
+                        playStartedAt = Date.now();
+                        loadVideo(data.videoId, syncedTime);
+                    } else {
+                        playStartedAt = null;
+                        const src = `https://www.youtube.com/embed/${data.videoId}?enablejsapi=1&start=${Math.floor(syncedTime)}&rel=0&modestbranding=1`;
+                        playerIframe.src = src;
+                    }
+                    
+                    if (data.participants) {
+                        data.participants.forEach(([id, info]) => {
+                            participants.set(id, info);
+                        });
+                        updateParticipantsList();
+                    }
+                    showSyncIndicator();
+                    setTimeout(() => { isSyncing = false; }, 1000);
+                    break;
+
+                case 'play':
+                    isSyncing = true;
+                    currentVideoId = data.videoId;
+                    const playLatency = (Date.now() - data.timestamp) / 1000;
+                    syncedTime = data.time + playLatency;
+                    isPlaying = true;
+                    playStartedAt = Date.now();
+                    loadVideo(data.videoId, syncedTime);
+                    showSyncIndicator();
+                    setTimeout(() => { isSyncing = false; }, 500);
+                    break;
+
+                case 'pause':
+                    isSyncing = true;
+                    currentVideoId = data.videoId;
+                    syncedTime = data.time;
+                    isPlaying = false;
+                    playStartedAt = null;
+                    const src = `https://www.youtube.com/embed/${data.videoId}?enablejsapi=1&start=${Math.floor(syncedTime)}&rel=0&modestbranding=1`;
+                    playerIframe.src = src;
+                    showSyncIndicator();
+                    setTimeout(() => { isSyncing = false; }, 500);
+                    break;
+
+                case 'videoChange':
+                    isSyncing = true;
+                    currentVideoId = data.videoId;
+                    syncedTime = 0;
+                    isPlaying = true;
+                    playStartedAt = Date.now();
+                    loadVideo(data.videoId);
+                    addSystemMessage('動画が変更されました');
+                    setTimeout(() => { isSyncing = false; }, 1000);
+                    break;
+
+                case 'chat':
+                    addChatMessage(data.sender, data.message);
+                    break;
+
+                case 'introduce':
+                    participants.set(conn.peer, { name: data.name, isHost: data.isHost });
+                    updateParticipantsList();
+                    addSystemMessage(`${data.name} が参加しました`);
+                    break;
+
+                case 'requestSync':
+                    if (isHost) {
+                        conn.send({
+                            type: 'sync',
+                            videoId: currentVideoId,
+                            time: getCurrentTime(),
+                            isPlaying: isPlaying,
+                            timestamp: Date.now(),
+                            participants: Array.from(participants.entries())
+                        });
+                    }
+                    break;
+            }
+        }
+
+        function broadcast(data) {
+            connections.forEach(conn => {
+                if (conn.open) {
+                    conn.send(data);
+                }
+            });
+        }
+
+        function createRoom() {
+            if (peer) {
+                peer.destroy();
+            }
+            connections = [];
+            participants.clear();
+            initPeer();
+        }
+
+        function joinRoom() {
+            const roomId = document.getElementById('joinRoomId').value.trim();
+            if (!roomId) {
+                showNotification('ルームIDを入力してください');
+                return;
+            }
+
+            if (peer) {
+                peer.destroy();
+            }
+            connections = [];
+            participants.clear();
+
+            isHost = false;
+            peer = new Peer({
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
+
+            peer.on('open', (id) => {
+                console.log('My peer ID:', id);
+                myRoomId = id;
+                updateStatus('connecting', '接続中...');
+                
+                const conn = peer.connect(roomId, { reliable: true });
+                handleConnection(conn);
+
+                conn.on('open', () => {
+                    updateStatus('connected', '接続済み');
+                    document.getElementById('roomId').textContent = roomId;
+                    document.getElementById('roomIdDisplay').style.display = 'block';
+                    participants.set(id, { name: myName, isHost: false });
+                    addSystemMessage('ルームに参加しました');
+                    
+                    // 同期をリクエスト
+                    setTimeout(() => {
+                        conn.send({ type: 'requestSync' });
+                    }, 500);
+                });
+            });
+
+            peer.on('connection', handleConnection);
+
+            peer.on('error', (err) => {
+                console.error('Peer error:', err);
+                if (err.type === 'peer-unavailable') {
+                    showNotification('ルームが見つかりません');
+                    updateStatus('error', 'ルームが見つかりません');
+                }
+            });
+        }
+
+        function changeVideo() {
+            const url = document.getElementById('videoUrl').value.trim();
+            const videoId = getVideoId(url);
+            
+            if (!videoId) {
+                showNotification('有効なYouTube URLを入力してください');
+                return;
+            }
+
+            currentVideoId = videoId;
+            syncedTime = 0;
+            isPlaying = true;
+            playStartedAt = Date.now();
+            loadVideo(videoId);
+            document.getElementById('videoUrl').value = '';
+
+            broadcast({
+                type: 'videoChange',
+                videoId: videoId
+            });
+
+            addSystemMessage('動画を変更しました');
+        }
+
+        function getVideoId(url) {
+            if (!url) return null;
+            const patterns = [
+                /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+                /^([a-zA-Z0-9_-]{11})$/
+            ];
+            for (const pattern of patterns) {
+                const match = url.match(pattern);
+                if (match) return match[1];
+            }
+            return null;
+        }
+
+        function sendChat() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            addChatMessage(myName, message);
+            broadcast({
+                type: 'chat',
+                sender: myName,
+                message: message
+            });
+
+            input.value = '';
+        }
+
+        function handleChatKeypress(event) {
+            if (event.key === 'Enter') {
+                sendChat();
+            }
+        }
+
+        function addChatMessage(sender, message) {
+            const chatMessages = document.getElementById('chatMessages');
+            const time = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+            
+            const msgElement = document.createElement('div');
+            msgElement.className = 'chat-message';
+            msgElement.innerHTML = `
+                <span class="sender">${escapeHtml(sender)}</span>
+                <span class="time">${time}</span>
+                <div>${escapeHtml(message)}</div>
+            `;
+            
+            chatMessages.appendChild(msgElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function addSystemMessage(message) {
+            const chatMessages = document.getElementById('chatMessages');
+            const msgElement = document.createElement('div');
+            msgElement.className = 'chat-message system';
+            msgElement.textContent = message;
+            chatMessages.appendChild(msgElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function updateStatus(type, text) {
+            const badge = document.getElementById('statusBadge');
+            const statusText = document.getElementById('statusText');
+            badge.className = 'status-badge ' + type;
+            statusText.textContent = text;
+        }
+
+        function updateParticipantCount() {
+            const count = participants.size;
+            document.getElementById('participantCount').textContent = count;
+        }
+
+        function updateParticipantsList() {
+            const list = document.getElementById('participantsList');
+            list.innerHTML = '';
+
+            participants.forEach((info, id) => {
+                const isMe = id === myRoomId;
+                const div = document.createElement('div');
+                div.className = 'participant';
+                div.innerHTML = `
+                    <div class="participant-avatar">${info.name.charAt(0)}</div>
+                    <div class="participant-name">${escapeHtml(info.name)}${isMe ? ' (あなた)' : ''}</div>
+                    ${info.isHost ? '<span class="participant-host">ホスト</span>' : ''}
+                `;
+                list.appendChild(div);
+            });
+
+            updateParticipantCount();
+        }
+
+        function copyRoomId() {
+            const roomId = document.getElementById('roomId').textContent;
+            navigator.clipboard.writeText(roomId).then(() => {
+                showNotification('ルームIDをコピーしました！');
+            }).catch(() => {
+                const textArea = document.createElement('textarea');
+                textArea.value = roomId;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                showNotification('ルームIDをコピーしました！');
+            });
+        }
+
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+
+        function showSyncIndicator() {
+            const indicator = document.getElementById('syncIndicator');
+            indicator.classList.remove('active');
+            void indicator.offsetWidth;
+            indicator.classList.add('active');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 初期化
+        window.onload = () => {
+            initPlayer();
+            createRoom();
+        };
+
+        // ページ離脱時のクリーンアップ
+        window.onbeforeunload = () => {
+            if (peer) {
+                peer.destroy();
+            }
+        };
+    </script>
+</body>
+</html>
