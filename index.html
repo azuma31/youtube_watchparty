@@ -398,7 +398,7 @@
                 </div>
             </div>
             <div class="join-section">
-                <input type="text" id="joinRoomId" placeholder="ルームIDを入力して参加...">
+                <input type="text" id="joinRoomId" placeholder="4桁のルームIDを入力...">
                 <button class="btn-primary" onclick="joinRoom()">参加する</button>
                 <button class="btn-secondary" onclick="createRoom()">新しいルームを作成</button>
             </div>
@@ -421,8 +421,9 @@
                     </div>
 
                     <div class="control-buttons">
-                        <button class="btn-primary" onclick="openVideo()">🎬 動画を開く</button>
-                        <button class="btn-secondary" onclick="syncToAll()">📡 時間を共有</button>
+                        <button class="btn-primary" onclick="syncPlay()">▶ 全員で再生</button>
+                        <button class="btn-secondary" onclick="syncPause()">⏸ 全員で停止</button>
+                        <button class="btn-secondary" onclick="openVideoManual()">🔗 手動で開く</button>
                     </div>
 
                     <div class="time-sync-box">
@@ -440,10 +441,9 @@
                         <h4>📖 使い方</h4>
                         <ol>
                             <li>ルームIDを友達に共有</li>
-                            <li>全員が同じYouTube URLをセット</li>
-                            <li>「動画を開く」で別タブでYouTubeを開く</li>
-                            <li>ホストが再生位置を調整して「時間を共有」</li>
-                            <li>ゲストは受け取った時間にシーク</li>
+                            <li>YouTube URLをセット</li>
+                            <li>「全員で再生」を押すと全員の画面で同時に動画が開きます</li>
+                            <li>時間を調整したい場合は入力してセット</li>
                         </ol>
                     </div>
                 </div>
@@ -511,8 +511,8 @@
             return null;
         }
 
-        // 動画を開く
-        function openVideo() {
+        // 動画を開く（手動）
+        function openVideoManual() {
             const videoId = getVideoId(currentVideoUrl);
             if (videoId) {
                 const url = `https://www.youtube.com/watch?v=${videoId}&t=${Math.floor(currentTime)}`;
@@ -522,6 +522,40 @@
             }
         }
 
+        // 全員で再生
+        function syncPlay() {
+            const videoId = getVideoId(currentVideoUrl);
+            if (!videoId) {
+                showNotification('有効なYouTube URLを設定してください');
+                return;
+            }
+            
+            // 自分の動画を開く
+            const url = `https://www.youtube.com/watch?v=${videoId}&t=${Math.floor(currentTime)}`;
+            window.open(url, '_blank');
+            
+            // 全員に再生指示を送信
+            broadcast({
+                type: 'syncPlay',
+                videoUrl: currentVideoUrl,
+                time: currentTime,
+                sender: myName
+            });
+            
+            addSystemMessage('▶ 全員で再生を開始しました');
+        }
+
+        // 全員で停止（時間を共有）
+        function syncPause() {
+            broadcast({
+                type: 'syncPause',
+                time: currentTime,
+                sender: myName
+            });
+            addSystemMessage(`⏸ 停止: ${formatTime(currentTime)} で一時停止を共有しました`);
+            showNotification('YouTubeを一時停止してください');
+        }
+
         // 時間をセット
         function setTime() {
             const input = document.getElementById('timeInput').value;
@@ -529,18 +563,6 @@
             document.getElementById('timeDisplay').textContent = formatTime(currentTime);
             document.getElementById('timeInput').value = '';
             showNotification(`時間を ${formatTime(currentTime)} にセットしました`);
-        }
-
-        // 時間を全員に共有
-        function syncToAll() {
-            const data = {
-                type: 'timeSync',
-                time: currentTime,
-                videoUrl: currentVideoUrl,
-                sender: myName
-            };
-            broadcast(data);
-            addSystemMessage(`⏱ ${formatTime(currentTime)} を共有しました`);
         }
 
         // 動画を変更
@@ -574,7 +596,7 @@
 
         // PeerJS初期化
         function initPeer() {
-            const peerId = 'ywp-' + Math.random().toString(36).substr(2, 9);
+            const peerId = 'ywp-' + String(Math.floor(1000 + Math.random() * 9000));
             
             peer = new Peer(peerId, {
                 config: {
@@ -589,13 +611,14 @@
             peer.on('open', (id) => {
                 console.log('Peer connected:', id);
                 myRoomId = id;
+                const displayId = id.replace('ywp-', '');
                 updateStatus('hosting', 'ルーム作成完了');
-                document.getElementById('roomId').textContent = id;
+                document.getElementById('roomId').textContent = displayId;
                 document.getElementById('roomIdDisplay').style.display = 'block';
                 isHost = true;
                 participants.set(id, { name: myName, isHost: true });
                 updateParticipantsList();
-                addSystemMessage('ルームを作成しました！ルームIDを共有して友達を招待しましょう。');
+                addSystemMessage('ルームを作成しました！ルームID「' + displayId + '」を共有して友達を招待しましょう。');
             });
 
             peer.on('connection', handleConnection);
@@ -659,6 +682,28 @@
                     }
                     break;
 
+                case 'syncPlay':
+                    currentVideoUrl = data.videoUrl;
+                    currentTime = data.time;
+                    document.getElementById('currentVideoUrl').textContent = currentVideoUrl;
+                    document.getElementById('timeDisplay').textContent = formatTime(currentTime);
+                    
+                    // 自動で動画を開く
+                    const videoId = getVideoId(data.videoUrl);
+                    if (videoId) {
+                        const url = `https://www.youtube.com/watch?v=${videoId}&t=${Math.floor(data.time)}`;
+                        window.open(url, '_blank');
+                    }
+                    addSystemMessage(`▶ ${data.sender} が再生を開始しました`);
+                    break;
+
+                case 'syncPause':
+                    currentTime = data.time;
+                    document.getElementById('timeDisplay').textContent = formatTime(currentTime);
+                    addSystemMessage(`⏸ ${data.sender} が ${formatTime(data.time)} で停止しました`);
+                    showNotification(`${formatTime(data.time)} で一時停止してください`);
+                    break;
+
                 case 'timeSync':
                     currentTime = data.time;
                     document.getElementById('timeDisplay').textContent = formatTime(currentTime);
@@ -711,10 +756,15 @@
         }
 
         function joinRoom() {
-            const roomId = document.getElementById('joinRoomId').value.trim();
+            let roomId = document.getElementById('joinRoomId').value.trim();
             if (!roomId) {
                 showNotification('ルームIDを入力してください');
                 return;
+            }
+            
+            // 4桁の数字だけ入力された場合はプレフィックスを追加
+            if (/^\d{4}$/.test(roomId)) {
+                roomId = 'ywp-' + roomId;
             }
 
             if (peer) peer.destroy();
@@ -740,7 +790,7 @@
 
                 conn.on('open', () => {
                     updateStatus('connected', '接続済み');
-                    document.getElementById('roomId').textContent = roomId;
+                    document.getElementById('roomId').textContent = roomId.replace('ywp-', '');
                     document.getElementById('roomIdDisplay').style.display = 'block';
                     participants.set(id, { name: myName, isHost: false });
                     addSystemMessage('ルームに参加しました');
@@ -823,7 +873,7 @@
         function copyRoomId() {
             const roomId = document.getElementById('roomId').textContent;
             navigator.clipboard.writeText(roomId).then(() => {
-                showNotification('ルームIDをコピーしました！');
+                showNotification('ルームID「' + roomId + '」をコピーしました！');
             }).catch(() => {
                 const ta = document.createElement('textarea');
                 ta.value = roomId;
@@ -831,7 +881,7 @@
                 ta.select();
                 document.execCommand('copy');
                 document.body.removeChild(ta);
-                showNotification('ルームIDをコピーしました！');
+                showNotification('ルームID「' + roomId + '」をコピーしました！');
             });
         }
 
